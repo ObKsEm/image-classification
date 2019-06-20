@@ -7,6 +7,7 @@ import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
+import torch.utils.data.dataloader
 
 import os
 import random
@@ -21,11 +22,12 @@ torch.manual_seed(SEED)
 torch.cuda.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
     parser.add_argument('--data_dir', type=str, help='data direction')
     parser.add_argument('--batch_size', type=int, default=64, help='batch size')
-    parser.add_argument('--work_dir', help='the dir to save logs and models')
+    parser.add_argument('--checkpoints', type=str, default='checkpoints', help='the dir to save logs and models')
     parser.add_argument(
         '--resume_from', help='the checkpoint file to resume from')
     parser.add_argument(
@@ -98,7 +100,7 @@ def evaluate(model, device, iterator, criterion):
 
 
 def main():
-    args = parse_args
+    args = parse_args()
     train_transforms = transforms.Compose([
         transforms.RandomHorizontalFlip(),
         transforms.RandomRotation(10),
@@ -114,6 +116,7 @@ def main():
     ])
 
     train_data = datasets.ImageFolder(os.path.join(args.data_dir, 'train'), train_transforms)
+    print(train_data.class_to_idx)
     valid_data = datasets.ImageFolder(os.path.join(args.data_dir, 'valid'), test_transforms)
     test_data = datasets.ImageFolder(os.path.join(args.data_dir, 'test'), test_transforms)
     print(f'Number of training examples: {len(train_data)}')
@@ -138,7 +141,10 @@ def main():
     criterion = nn.CrossEntropyLoss()
 
     EPOCHS = 10
-    SAVE_DIR = 'checkpoints'
+    SAVE_DIR = args.checkpoints
+    if not os.path.exists(SAVE_DIR):
+        os.mkdir(SAVE_DIR)
+
     MODEL_SAVE_PATH = os.path.join(SAVE_DIR, 'resnet18.pt')
 
     best_valid_loss = float('inf')
