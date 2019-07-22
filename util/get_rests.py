@@ -2,17 +2,16 @@ import os
 import cv2
 import random
 
-source_dir = '/home/lichengzhi/mmdetection/data/VOCdevkit'
+source_dir = '/home/lichengzhi/image-classification/voc/VOCdevkit/VOC2012/JPEGImages'
 output_dir = '/home/lichengzhi/image-classification/data/classification/rests'
 
 
 def main():
     num = 0
-    rests_num = 1000
+    rests_num = 10000
     for r, dirs, files in os.walk(source_dir):
         for file in files:
-            x = random.random()
-            if num < rests_num and x < 0.2:
+            if num < rests_num:
                 img = cv2.imread(os.path.join(r, file))
                 if img is not None:
                     num += 1

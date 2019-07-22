@@ -7,8 +7,7 @@ import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-import torch.utils.data.dataloader
-
+from torch.utils.data import DataLoader, Dataset
 import os
 import random
 import numpy as np
@@ -24,7 +23,7 @@ torch.backends.cudnn.deterministic = True
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Train a detector')
+    parser = argparse.ArgumentParser(description='Train a classifier')
     parser.add_argument('--data_dir', type=str, help='data direction')
     parser.add_argument('--batch_size', type=int, default=64, help='batch size')
     parser.add_argument('--checkpoints', type=str, default='checkpoints', help='the dir to save logs and models')
@@ -62,9 +61,7 @@ def calculate_accuracy(fx, y):
 def train(model, device, iterator, optimizer, criterion):
     epoch_loss = 0
     epoch_acc = 0
-
     model.train()
-
     for (x, y) in iterator:
         x = x.to(device)
         y = y.to(device)
@@ -83,9 +80,7 @@ def train(model, device, iterator, optimizer, criterion):
 def evaluate(model, device, iterator, criterion):
     epoch_loss = 0
     epoch_acc = 0
-
     model.eval()
-
     with torch.no_grad():
         for (x, y) in iterator:
             x = x.to(device)
@@ -102,15 +97,17 @@ def evaluate(model, device, iterator, criterion):
 def main():
     args = parse_args()
     train_transforms = transforms.Compose([
+        transforms.Resize((256, 256)),
+        transforms.RandomCrop((224, 224), pad_if_needed=True),
         transforms.RandomHorizontalFlip(),
         transforms.RandomRotation(10),
-        transforms.RandomCrop((224, 224), pad_if_needed=True),
         transforms.ToTensor(),
         transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     ])
 
     test_transforms = transforms.Compose([
-        transforms.CenterCrop((224, 224)),
+        transforms.Resize((256, 256)),
+        transforms.RandomCrop((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     ])
@@ -131,23 +128,19 @@ def main():
     device = torch.device('cuda')
     import torchvision.models as models
 
-    model = models.resnet18(pretrained=True).to(device)
-    for param in model.parameters():
-        param.requires_grad = False
-
-    model.fc = nn.Linear(in_features=512, out_features=3).to(device)
+    model = models.resnet101(pretrained=False).to(device)
+    fc_features = model.fc.in_features
+    model.fc = nn.Linear(in_features=fc_features, out_features=4).to(device)
 
     optimizer = optim.Adam(model.parameters())
     criterion = nn.CrossEntropyLoss()
 
-    EPOCHS = 10
+    EPOCHS = 12
     SAVE_DIR = args.checkpoints
     if not os.path.exists(SAVE_DIR):
         os.mkdir(SAVE_DIR)
 
-    MODEL_SAVE_PATH = os.path.join(SAVE_DIR, 'resnet18.pt')
-
-    best_valid_loss = float('inf')
+    MODEL_SAVE_PATH = os.path.join(SAVE_DIR)
 
     if not os.path.isdir(f'{SAVE_DIR}'):
         os.makedirs(f'{SAVE_DIR}')
@@ -156,14 +149,12 @@ def main():
         train_loss, train_acc = train(model, device, train_iterator, optimizer, criterion)
         valid_loss, valid_acc = evaluate(model, device, valid_iterator, criterion)
 
-        if valid_loss < best_valid_loss:
-            best_valid_loss = valid_loss
-            torch.save(model.state_dict(), MODEL_SAVE_PATH)
+        torch.save(model.state_dict(), os.path.join(MODEL_SAVE_PATH, "classifier" + str(epoch) + ".pth"))
 
         print(
             f'| Epoch: {epoch + 1:02} | Train Loss: {train_loss:.3f} | Train Acc: {train_acc * 100:05.2f}% | Val. Loss: {valid_loss:.3f} | Val. Acc: {valid_acc * 100:05.2f}% |')
 
-    model.load_state_dict(torch.load(MODEL_SAVE_PATH))
+    model.load_state_dict(torch.load(os.path.join(MODEL_SAVE_PATH, "classifier" + str(EPOCHS - 1)) + ".pth"))
 
     test_loss, test_acc = evaluate(model, device, test_iterator, criterion)
 
